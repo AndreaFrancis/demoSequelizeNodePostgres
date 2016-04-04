@@ -1,18 +1,24 @@
-//Initializing express server
 var app = require("express")();
 var bodyParser = require("body-parser");
-app.use(bodyParser());
-var helloWorld = function(req, res) {
-  res.send("Hello World");
-}
-
-// Initializing Sequalize
+var jwt = require("jsonwebtoken");
+var config = require("./config");
 var Sequelize = require("sequelize");
-var connectionString = "postgres://postgres:postgres@localhost:5432/test";
+var connectionString = config.dialect+"://"+config.user+":"+config.password+"@"+config.server+":"+config.port+"/"+config.db;
 var sequelize = new Sequelize(connectionString);
 var userService = require("./userService")(sequelize);
+var user = require("./model")(sequelize);
 
-//Checking data base connectionString
+var authenticate = function(req, res) {
+  user.User.findOne({where:{id:req.body.id}})
+              .then(function(user) {
+                var token = jwt.sign({username: user.username, password: user.password}, config.secret, {expiresIn: '10 hours' });
+                console.log(token);
+                res.send(token);
+              }, function(err) {
+                res.send(401);
+              });
+}
+
 sequelize.authenticate().then(function(err) {
   if (err) {
     console.log("Unable to connect to database ", err);
@@ -21,13 +27,12 @@ sequelize.authenticate().then(function(err) {
   }
 });
 
-//Sync model with data base
-// -- { force:true } to reset database
 sequelize.sync().then(function(err){
   app.get("/users", userService.getUsers);
   app.post("/users", userService.createUser);
-  app.get("/",helloWorld);
+  app.post("/authenticate", authenticate);
   app.listen(5000);
 });
 
+app.use(bodyParser());
 app.listen(3000);
